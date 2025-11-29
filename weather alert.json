@@ -1,0 +1,192 @@
+{
+  "name": "weather alert",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ccd96d3f-e6af-47b1-81ad-3a3c46938972",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "https://api.openweathermap.org/data/2.5/weather",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "lat",
+              "value": "12.9716"
+            },
+            {
+              "name": "lon",
+              "value": "77.5946"
+            },
+            {
+              "name": "exclude",
+              "value": "minutely,hourly"
+            },
+            {
+              "name": "units",
+              "value": "metric"
+            },
+            {
+              "name": "appid",
+              "value": "0b2b25e8907dc8b27a7aa68e11548f72"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        208,
+        0
+      ],
+      "id": "6cce39cf-1798-4c42-aec9-64aec5a09a6b",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Weather alert detection (no dedupe version)\n\nconst resp = items[0].json || {};\nconst nowISO = new Date().toISOString();\n\n// Thresholds\nconst THRESHOLDS = {\n  tempHigh: 40,\n  tempLow: 20,\n  windHigh: 10,\n  rainThreshold: 0.5\n};\n\n// Extract values\nconst temp = resp.main?.temp;\nconst wind = resp.wind?.speed || 0;\nconst rain = resp.rain?.[\"1h\"] || 0;\n\nlet issues = [];\n\n// Temperature check\nif (typeof temp === \"number\") {\n  if (temp >= THRESHOLDS.tempHigh) issues.push(`High Temperature: ${temp}°C`);\n  if (temp <= THRESHOLDS.tempLow) issues.push(`Low Temperature: ${temp}°C`);\n}\n\n// Wind & rain check\nif (wind >= THRESHOLDS.windHigh) issues.push(`High Wind: ${wind} m/s`);\nif (rain >= THRESHOLDS.rainThreshold) issues.push(`Rain Detected: ${rain} mm`);\n\n// No issues → notify:false\nif (issues.length === 0) {\n  return [\n    {\n      json: {\n        notify: false,\n        checkedAt: nowISO\n      }\n    }\n  ];\n}\n\n// Build message\nconst message = `🚨 WEATHER ALERT 🚨\n${issues.join(\"\\n\")}\n\nLocation: ${resp.name || `${resp.coord?.lat}, ${resp.coord?.lon}`}\nTime: ${nowISO}\n`;\n\nreturn [\n  {\n    json: {\n      notify: true,\n      message,\n      issues,\n      checkedAt: nowISO\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "987755c3-f941-49e0-b614-5e09f353c001",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "659b2016-7722-455c-8d0e-1c29f1961d50",
+              "leftValue": "={{$json[\"notify\"]}}\n",
+              "rightValue": "=is true\n",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        0
+      ],
+      "id": "ad63a6cd-9df7-474f-9a3b-350bac323666",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "fromEmail": "gopikavenkatesan20@gmail.com",
+        "toEmail": "nknishant5810@gmail.com",
+        "subject": "Weather Alert Detected!",
+        "html": "=<h2>🌧 Weather Alert</h2>\n\n<p><strong>Alert Message:</strong></p>\n<p>{{ $json.message }}</p>\n\n<p><strong>Issues:</strong></p>\n<p>{{ $json.issues }}</p>\n\n<p><strong>Checked At:</strong> {{ $json.checkedAt }}</p>\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        832,
+        -96
+      ],
+      "id": "5743019f-ed23-46fe-8cdd-27b84f7e9243",
+      "name": "Send email",
+      "webhookId": "a57870f8-bd48-4e25-b2ee-aee928344b01",
+      "credentials": {
+        "smtp": {
+          "id": "XYk3KNcQN4Nopk9B",
+          "name": "SMTP account 3"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "94fb77ef-8c2e-446d-829f-0b56a9d68866",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "673e616885b50bd3313f88158657f588431724992f44069b7a5f4de07311a314"
+  },
+  "id": "WF0aIUZ2hMNBLv3f",
+  "tags": []
+}
